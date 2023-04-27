@@ -1,0 +1,487 @@
+---
+title: "Code for thesis github"
+author: "Virginia Davis"
+date: "2023-04-27"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#Install the required packages
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(ggsignif)
+library(ggpubr)
+library(RColorBrewer)
+library(reshape2)
+library(ggthemes)
+library(tinytex)
+```
+
+```{r}
+#DATA CLEANING
+#doing calculations for both 7.0 and 6.5 pH
+# 
+# cam <- read.csv("/Users/virginiadavis/Downloads/prelimCAMtitrations1and2.csv")
+# View(cam)
+# 
+# cam2tot <- cam %>%
+#   dplyr::select(PlantID,
+#                 Day,
+#                 Time,
+#                 Treatment,
+#                 State,
+#                 H_total) %>%
+#   dplyr::filter(!is.na(H_total)) %>%
+#   pivot_wider(id_cols = c(PlantID, Day, Treatment, State), names_from = Time ,
+#               values_from = H_total) %>%
+#   filter(AM>0) %>%
+#   mutate(deltaHtot = AM - PM)
+# View(cam2tot)
+# 
+# cam2_6.5 <- cam %>%
+#   dplyr::select(PlantID,
+#                 Time,
+#                 Treatment,
+#                 State,
+#                 H_total,
+#                 H_6.5) %>%
+#   dplyr::filter(!is.na(H_6.5))%>%
+#   pivot_wider(id_cols = c(PlantID, Treatment, State), names_from = Time , values_from = H_6.5) %>%
+#   mutate(deltaH6.5 = AM - PM)%>%
+#   filter(AM>0)
+```
+
+```{r}
+#load in dataforR
+df <- read.csv("/Users/virginiadavis/Downloads/dataforR.csv")
+df <- df %>% filter(State != 'mutilated') %>% filter(State != 'Mutilated')
+```
+
+```{r}
+####LEAF ACCUMULATION DATA
+df <- read.csv("/Users/virginiadavis/Downloads/dataforR.csv")
+
+#both short and long-day leaves accumulation
+
+leavesdata <- df %>%
+  dplyr::filter(!is.na(leaves)) %>%
+  dplyr::filter(!is.na(days_since_germ))
+
+leavesdata$leaves %>% as.numeric()
+leavesdata$days_since_germ %>% as.numeric()
+
+l <- ggplot(leavesdata, 
+            aes(days_since_germ, 
+                leaves, 
+                col = daylength)) +
+  geom_point(size = 0.5) +
+  labs(title = "Leaves Accumulated in Days Since Germination",
+       y = "Leaves",
+       x = "Days Since Germination",
+       col = "Day Length")  +
+  stat_smooth(method = "lm",
+              formula = y ~ poly(x, 5)) +
+  geom_vline(xintercept = 62.19, linewidth = .5, color = "red")+
+  geom_vline(xintercept = 76.69, linewidth = .5, color = "blue")+
+  annotate(geom = "text",
+           label = "Average Days to \nReproductive Phase \n(Long Day)",
+           x = 42,
+           y = 25,
+           angle = 0, 
+           vjust = 1,
+           size = 3,
+           color = "red")+
+  annotate(geom = "text",
+           label = "Average Days to\n Reproductive Phase \n(Short Day)",
+           x = 97,
+           y = 25,
+           angle = 0, 
+           vjust = 1,
+           size = 3,
+           color = "blue")
+  
+l + theme_clean()
+
+#Is there a difference between leaf accumulation in short and long day plants?
+test_result <- wilcox.test(leaves ~ daylength, data = leavesdata)
+test_result
+
+```
+
+```{r}
+#FIND FIT FOR REGRESSION- Appendix 1
+days_since_germ <- as.numeric(leavesdata$days_since_germ)
+fit1 <- lm(leaves~days_since_germ, data=leavesdata)
+fit2 <- lm(leaves~poly(days_since_germ,2,raw=TRUE), data=leavesdata)
+fit3 <- lm(leaves~poly(days_since_germ,3,raw=TRUE), data=leavesdata)
+fit4 <- lm(leaves~poly(days_since_germ,4,raw=TRUE), data=leavesdata)
+fit5 <- lm(leaves~poly(days_since_germ,5,raw=TRUE), data=leavesdata)
+fit5_short <- lm(leaves ~ poly(days_since_germ, 5, raw = TRUE), data = subset(leavesdata, daylength == "Short"))
+fit5_long <- lm(leaves ~ poly(days_since_germ, 5, raw = TRUE), data = subset(leavesdata, daylength == "Long"))
+summary(fit5_short)
+summary(fit5_long)
+
+
+#define x-axis values
+view(leavesdata)
+x_axis <- leavesdata$days_since_germ
+a <- predict(fit1, data.frame(x=x_axis))
+plot(leavesdata$days_since_germ, leavesdata$leaves, pch=19, xlab='x', ylab='y')
+#add curve of each model to plot
+lines(x_axis, predict(fit1, data.frame(x=x_axis)), col='green')
+lines(x_axis, predict(fit2, data.frame(x=x_axis)), col='red')
+lines(x_axis, predict(fit3, data.frame(x=x_axis)), col='purple')
+lines(x_axis, predict(fit4, data.frame(x=x_axis)), col='blue')
+lines(x_axis, predict(fit5, data.frame(x=x_axis)), col='orange')
+#calculated adjusted R-squared of each model
+summary(fit1)$adj.r.squared
+summary(fit2)
+summary(fit3)
+summary(fit4)
+summary(fit5)
+```
+
+```{r}
+##plot of days since germ vs acid accumulation CONTINUOUS
+dfwd <- df %>% filter(State != 'mutilated') %>% filter(State != 'Mutilated') %>%
+  dplyr::select(ID,
+                daylength,
+                deltaHtot,
+                deltaH_6.5,
+                State,
+                Treatment,
+                days_since_germ) 
+  # filter(daylength == "Short")
+dfwd <- subset(dfwd, !(ID %in% c("L16", "L20", "L21", "L38", "L44", "S12", "S16", "S34A", "S34B", "S35") & State == "Flowering"))
+dfwd <-  subset(dfwd, ID != "S52")
+dfwd$State[dfwd$ID == "S34A"] <- "Vegetative"
+dfwd$State[dfwd$ID == "S35"] <- "Vegetative"
+
+  continue <- dfwd %>%
+    filter(Treatment != "Drought") %>% 
+    filter(State != 'mutilated') %>% 
+    filter(State != 'Mutilated') %>% 
+    filter(!is.na(deltaHtot))
+  view(continue)
+  
+#Finding R squared for linear models
+  lmshort <- lm(deltaHtot ~ days_since_germ, data = subset(continue, daylength == "Short"))
+  lmlong <- lm(deltaHtot ~ days_since_germ, data = subset(continue, daylength == "Long"))
+  summary(lmshort)
+  summary(lmlong)
+
+#Making a plot of days since germination vs nocturnal acid accumulation
+  ggplot(continue, aes(x = days_since_germ, y = deltaHtot)) +
+    geom_point(aes(color = State, shape = daylength, linetype = daylength), size = 2) +
+    geom_smooth(aes(group = daylength, linetype = daylength),
+                method = "lm", se = FALSE) +
+    xlim(0, max(continue$days_since_germ)) + ylim(-20, max(continue$deltaHtot)) + 
+    labs(title = "Acid Accumulation Predicted \n by Days Since Germination", 
+         x = "Days Since Germination", 
+         y = expression(Delta~H~(ueq/g))) +
+    geom_text(x = 50, y = 25, label = "R-Squared = 0.09936\n p-value = 0.153", size = 4) +
+    geom_text(x = 50, y = -10, label = "R-Squared = 0.01488\n p-value = 0.589", size = 4) +
+    scale_shape_manual(name = "Day Length", labels = c("Long", "Short"), 
+                       values = c(16, 17)) +
+    scale_linetype_manual(name = "Day Length", labels = c("Long", "Short"), 
+                          values = c("solid", "dashed")) +
+    theme_clean()
+```
+
+
+```{r}
+#1 p is shortday to 7.0
+#2 q is long day to 7.0
+#3 r is longday to 6.5
+#4 s is shortday to 6.5
+#5 t is allday to 7.0
+#6 u is allday to 6.5
+```
+
+```{r}
+
+#plot of binned acid accum in short day using deltaH_total
+
+#load in data for binned boxplots
+df <- read.csv("/Users/virginiadavis/Downloads/dataforR.csv")
+testdf <- df %>% filter(State != 'mutilated') %>% filter(State != 'Mutilated')
+
+#making a dataframe that removes the cusp flower/fruit data
+testdf <- subset(testdf, !(ID %in% c("L16", "L20", "L21", "L38", "L44", "S12", "S16", "S34A", "S34B", "S35") & State == "Flowering"))
+view(testdf)
+
+
+shortday <- testdf %>%
+  filter(Treatment != "Drought") %>%
+  filter(daylength == "Short") %>%
+  filter(!is.na(State)) %>%
+  filter(!is.na(deltaHtot))
+shortday <- subset(shortday, ID != "S52")
+shortday$State[shortday$ID == "S34A"] <- "Vegetative"
+shortday$State[shortday$ID == "S35"] <- "Vegetative"
+
+#Factor by State
+shortday$State <- factor(shortday$State, levels = c('Vegetative', 'Reproductive', 'Flowering','Fruiting'))
+#Make comparisons between states
+my_comparisons <- list(c("Flowering","Reproductive"), c("Reproductive", "Vegetative"), c("Flowering", "Vegetative"), c("Flowering", "Fruiting"), c("Reproductive", "Fruiting"), c("Vegetative", "Fruiting"))
+
+#1 shortday to 7.0
+p <- ggplot(shortday, aes(x = State, y = deltaHtot))
+p + geom_boxplot(aes(fill = State), outlier.shape = NA) +
+  geom_jitter(width = 0.2) +
+  stat_compare_means(comparisons = my_comparisons, label.y = c(35, 41, 47, 53, 59, 64)) +
+  scale_fill_brewer(palette = "Pastel1") +
+  labs(title = "Comparisons of Overnight Acid Accumulation\n Over Ontogeny (12hr Photoperiod, Titrated to 7.0", y = expression(Delta~H~(ueq/g))) +
+  theme(plot.title = element_text(size = 10))+
+  theme_clean()
+
+```
+
+```{r}
+#long day to 7.0
+longday<- testdf %>%
+  filter(Treatment != "Drought") %>%
+  filter(daylength == "Long") %>%
+  filter(!is.na(State)) %>%
+  filter(!is.na(deltaHtot))
+view(longday)
+#Factor by State
+longday$State <- factor(longday$State, levels = c('Vegetative', 'Reproductive', 'Flowering','Fruiting'))
+#Make comparisons between states
+my_comparisons <- list(c("Flowering","Reproductive"), c("Reproductive", "Vegetative"), c("Flowering", "Vegetative"), c("Flowering", "Fruiting"), c("Reproductive", "Fruiting"), c("Vegetative", "Fruiting"))
+
+#2 longday to 7.0
+q <- ggplot(longday, aes(x = State, y = deltaHtot))
+q + geom_boxplot(aes(fill = State), outlier.shape = NA) +
+  geom_jitter(width = 0.2) +
+  stat_compare_means(comparisons = my_comparisons, label.y = c(35, 41, 47, 53, 59, 64)) +
+  scale_fill_brewer(palette = "Pastel1") +
+  labs(title = "Comparisons of Overnight Acid Accumulation\n Over Ontogeny (14hr Photoperiod, Titrated to 7.0", y = expression(Delta~H~(ueq/g))) +
+  theme(plot.title = element_text(size = 10))+
+  theme_clean()
+```
+
+```{r}
+## REPEAT EVERYTHING FOR to 6.5
+
+shortday6.5 <- testdf %>%
+  filter(Treatment != "Drought") %>%
+  filter(daylength == "Short") %>%
+  filter(!is.na(State)) %>%
+  filter(!is.na(deltaH_6.5))
+shortday6.5 <- subset(shortday, ID != "S52")
+shortday6.5$State[shortday$ID == "S34A"] <- "Vegetative"
+shortday6.5$State[shortday$ID == "S35"] <- "Vegetative"
+
+#Factor by State
+shortday6.5$State <- factor(shortday6.5$State, levels = c('Vegetative', 'Reproductive', 'Flowering','Fruiting'))
+#Make comparisons between states
+my_comparisons <- list(c("Flowering","Reproductive"), c("Reproductive", "Vegetative"), c("Flowering", "Vegetative"), c("Flowering", "Fruiting"), c("Reproductive", "Fruiting"), c("Vegetative", "Fruiting"))
+
+#1 shortday to 6.5
+r <- ggplot(shortday6.5, aes(x = State, y = deltaH_6.5))
+r + geom_boxplot(aes(fill = State), outlier.shape = NA) +
+  geom_jitter(width = 0.2) +
+  stat_compare_means(comparisons = my_comparisons, label.y = c(35, 41, 47, 53, 59, 64)) +
+  scale_fill_brewer(palette = "Pastel1") +
+  labs(title = "Comparisons of Overnight Acid Accumulation\n Over Ontogeny (12hr Photoperiod, Titrated to 6.5)", y = expression(Delta~H~(ueq/g))) +
+  theme(plot.title = element_text(size = 10))+
+  theme_clean()
+
+
+#Long day to 6.5
+longday6.5 <- testdf %>%
+  filter(Treatment != "Drought") %>%
+  filter(daylength == "Long") %>%
+  filter(!is.na(State)) %>%
+  filter(!is.na(deltaH_6.5))
+
+#Factor by State
+longday6.5$State <- factor(longday6.5$State, levels = c('Vegetative', 'Reproductive', 'Flowering','Fruiting'))
+#Make comparisons between states
+my_comparisons <- list(c("Flowering","Reproductive"), c("Reproductive", "Vegetative"), c("Flowering", "Vegetative"), c("Flowering", "Fruiting"), c("Reproductive", "Fruiting"), c("Vegetative", "Fruiting"))
+
+#1 longday to 6.5
+s <- ggplot(longday6.5, aes(x = State, y = deltaH_6.5))
+s + geom_boxplot(aes(fill = State), outlier.shape = NA) +
+  geom_jitter(width = 0.2) +
+  stat_compare_means(comparisons = my_comparisons, label.y = c(35, 41, 47, 53, 59, 64)) +
+  scale_fill_brewer(palette = "Pastel1") +
+  labs(title = "Comparisons of Overnight Acid Accumulation\n Over Ontogeny (14hr Photoperiod, Titrated to 6.5)", y = expression(Delta~H~(ueq/g))) +
+  theme(plot.title = element_text(size = 10))+
+  geom_point(aes(x = 0, y = 0), shape = 1, size = 3, color = NA)+
+  theme_clean()
+```
+
+```{r}
+##Including drought binned comparisons
+
+dfwd <- df %>% filter(State != 'mutilated') %>% filter(State != 'Mutilated') %>%
+  dplyr::select(ID,
+                daylength,
+                deltaHtot,
+                deltaH_6.5,
+                State,
+                Treatment,
+                days_since_germ) 
+  # filter(daylength == "Short")
+dfwd <- subset(dfwd, !(ID %in% c("L16", "L20", "L21", "L38", "L44", "S12", "S16", "S34A", "S34B", "S35") & State == "Flowering"))
+dfwd <-  subset(dfwd, ID != "S52")
+dfwd$State[dfwd$ID == "S34A"] <- "Vegetative"
+dfwd$State[dfwd$ID == "S35"] <- "Vegetative"
+
+cam2 <- dfwd %>%
+  filter(!is.na(State))%>%
+  filter(!is.na(deltaHtot))
+
+
+cam2$State <- factor(cam2$State, levels = c("Vegetative", "Reproductive", "Flowering", "Fruiting"))
+view(cam2)
+my_comparisons <- list(c("Flowering","Reproductive"), c("Reproductive", "Vegetative"), c("Flowering", "Vegetative"), c("Flowering", "Fruiting"), c("Reproductive", "Fruiting"), c("Vegetative", "Fruiting"))
+
+#Boxplot comparisons of drought vs watered
+b <- ggplot(cam2, aes(x = Treatment, y = deltaHtot))
+b + geom_boxplot(aes(fill = State), outlier.shape = NA) +
+  geom_jitter(width = 0.2) + 
+  facet_grid(. ~ State) +
+  geom_signif(comparisons = list(c("Drought", "Watered")), 
+              map_signif_level=TRUE) +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(title = " (12hr Photoperiod, Titrated to 7.0)", y = expression(Delta~H~(ueq/g))) +
+  theme_clean()
+```
+
+```{r}
+#Wilcoxon Test of drought flowering
+cam_DF <- cam2 %>%
+  dplyr::filter(Treatment=="Drought" & State=="Flowering")
+
+shapiro.test(cam2$deltaHtot)
+ggqqplot(cam_DF$deltaHtot, ylab = "deltaHtot",
+         ggtheme = theme_minimal())
+res_DF <- wilcox.test(cam_DF$deltaHtot, mu = 0)
+res_DF
+
+#Drought reproductive wilcoxon
+cam_DR <- cam2 %>%
+  dplyr::filter(Treatment=="Drought" & State=="Reproductive")
+
+# view(cam_DR)
+q_DR <- ggplot(cam_DR, aes(x = State, y = deltaHtot))
+q_DR + geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width = 0.2)
+
+shapiro.test(cam_DR$deltaHtot)
+ggqqplot(cam_DR$deltaHtot, ylab = "deltaHtot",
+         ggtheme = theme_minimal())
+
+res_DR <- wilcox.test(cam_DR$deltaHtot, mu = 0)
+res_DR
+
+#Drought Vegetative wilcoxon
+cam_DV <- cam2 %>%
+  dplyr::filter(Treatment=="Drought" & State=="Vegetative")
+
+view(cam_DV)
+q_DV <- ggplot(cam_DV, aes(x = State, y = deltaHtot))
+q_DV + geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width = 0.2)
+
+shapiro.test(cam_DV$deltaHtot)
+ggqqplot(cam_DV$deltaHtot, ylab = "deltaHtot",
+         ggtheme = theme_minimal())
+
+res_DV <- wilcox.test(cam_DV$deltaHtot, mu = 0)
+res_DV
+
+#Drought Fruiting wilcoxon
+cam_DFr <- cam2 %>%
+  dplyr::filter(Treatment=="Drought" & State=="Fruiting")
+
+view(cam_DFr)
+q_DFr <- ggplot(cam_DFr, aes(x = State, y = deltaHtot))
+q_DFr + geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width = 0.2)
+
+shapiro.test(cam_DFr$deltaHtot)
+ggqqplot(cam_DFr$deltaHtot, ylab = "deltaHtot",
+         ggtheme = theme_minimal())
+
+res_DFr <- wilcox.test(cam_DFr$deltaHtot, mu = 0)
+res_DFr
+
+#Watered Fruiting wilcoxon
+cam_WFr <- cam2 %>%
+  dplyr::filter(Treatment=="Watered" & State=="Fruiting")
+
+view(cam_WFr)
+q_WFr <- ggplot(cam_WFr, aes(x = State, y = deltaHtot))
+q_WFr + geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width = 0.2)
+
+shapiro.test(cam_WFr$deltaHtot)
+ggqqplot(cam_WFr$deltaHtot, ylab = "deltaHtot",
+         ggtheme = theme_minimal())
+
+res_WFr <- wilcox.test(cam_WFr$deltaHtot, mu = 0)
+res_WFr
+
+#watered flowering wilcoxon
+cam_WF <- cam2 %>%
+  dplyr::filter(Treatment=="Watered" & State=="Flowering")
+
+view(cam_WF)
+q_WF <- ggplot(cam_WF, aes(x = State, y = deltaHtot))
+q_WF + geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width = 0.2)
+
+shapiro.test(cam_WF$deltaHtot)
+ggqqplot(cam_WF$deltaHtot, ylab = "deltaHtot",
+         ggtheme = theme_minimal())
+
+res_WF <- wilcox.test(cam_WF$deltaHtot, mu = 0)
+res_WF
+
+res_WF <- wilcox.test(cam_WF$deltaHtot, mu = 0)
+res_WF
+
+#Watered reproductive wilcoxon
+cam_WR <- cam2 %>%
+  dplyr::filter(Treatment=="Watered" & State=="Reproductive")
+
+view(cam_WR)
+q_WR <- ggplot(cam_WR, aes(x = State, y = deltaHtot))
+q_WR + geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width = 0.2)
+
+shapiro.test(cam_WR$deltaHtot)
+ggqqplot(cam_WR$deltaHtot, ylab = "deltaHtot",
+         ggtheme = theme_minimal())
+
+res_WR <- wilcox.test(cam_WR$deltaHtot, mu = 0)
+res_WR
+
+#watered vegetative wilcoxon
+cam_WV <- cam2 %>%
+  dplyr::filter(Treatment=="Watered" & State=="Vegetative")
+
+view(cam_WV)
+q_WV <- ggplot(cam_WV, aes(x = State, y = deltaHtot))
+q_WV + geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width = 0.2)
+
+shapiro.test(cam_WV$deltaHtot)
+ggqqplot(cam_WV$deltaHtot, ylab = "deltaHtot",
+         ggtheme = theme_minimal())
+
+res_WV <- wilcox.test(cam_WV$deltaHtot, mu = 0)
+res_WV
+```
+
